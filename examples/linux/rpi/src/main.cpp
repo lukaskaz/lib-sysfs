@@ -1,8 +1,6 @@
 #include "sysfs/interfaces/linux/sysfs.hpp"
 
-#include <algorithm>
 #include <iostream>
-#include <ranges>
 
 int main(int argc, [[maybe_unused]] char** argv)
 {
@@ -15,7 +13,8 @@ int main(int argc, [[maybe_unused]] char** argv)
             std::string path{"/sys/class/thermal"};
             auto iface = sysfs::Factory::create<Sysfs, configrw_t>(path);
 
-            auto val = iface->read("thermal_zone0/temp");
+            std::string val;
+            iface->read("thermal_zone0/temp", val);
             std::cout << "Read temperature value: " << val << "\n";
             std::cout << "First scenario DONE -> destroying iface\n";
         }
@@ -25,44 +24,23 @@ int main(int argc, [[maybe_unused]] char** argv)
             using namespace sysfs::lnx;
             std::string path{"/sys/class/gpio/"};
             auto iface = sysfs::Factory::create<Sysfs, configexportrw_t>(
-                {path, "gpio", {415, 419, 420}});
+                {path, "415", "gpio"});
 
-            std::vector<std::pair<uint32_t, std::string>> val;
+            std::string val;
             iface->read("direction", val);
-            std::ranges::for_each(val, [](const auto& v) {
-                std::cout << "Gpio direction: " << v.first << "->" << v.second
-                          << "\n";
-            });
-            iface->write("direction", {{415, "out"}, {420, "out"}});
-            iface->write(419, "direction", "out");
-            val.clear();
+            std::cout << "Gpio direction: " << val << "\n";
+            iface->write("direction", "out");
             iface->read("direction", val);
-            std::ranges::for_each(val, [](const auto& v) {
-                std::cout << "Gpio direction: " << v.first << "->" << v.second
-                          << "\n";
-            });
+            std::cout << "Gpio direction: " << val << "\n";
 
-            val.clear();
             iface->read("value", val);
-            std::ranges::for_each(val, [](const auto& v) {
-                std::cout << "Gpio  value: " << v.first << "->" << v.second
-                          << "\n";
-            });
+            std::cout << "Gpio value: " << val << "\n";
             std::cout << "Press [enter]" << std::flush;
             getchar();
-            iface->writetest("value", {{415, "1"}, {420, "1"}});
-            val.clear();
+            val = val == "0" ? "1" : val;
+            iface->writetest("value", val);
             iface->read("value", val);
-            std::ranges::for_each(val, [](const auto& v) {
-                std::cout << "Gpio  value: " << v.first << "->" << v.second
-                          << "\n";
-            });
-
-            std::string ret;
-            iface->write(419, "value", "1");
-            iface->read(419, "value", ret);
-            std::cout << "Gpio  value: " << 419 << " -> " << ret << "\n";
-
+            std::cout << "Gpio value: " << val << "\n";
             std::cout
                 << "Second scenario DONE -> destroying/unexporting iface\n";
         }

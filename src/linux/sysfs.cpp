@@ -1,10 +1,8 @@
 #include "sysfs/interfaces/linux/sysfs.hpp"
 
-#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <ranges>
 #include <source_location>
 
 namespace sysfs::lnx
@@ -17,74 +15,25 @@ struct Sysfs::Handler
 {
   public:
     explicit Handler(const configexportrw_t& config) :
-        path{std::get<0>(config)}, type{std::get<1>(config)}, nums{std::get<2>(
-                                                                  config)}
+        path{std::get<0>(config)}, num{std::get<1>(config)},
+        target{std::get<2>(config)}, directory{path}
     {
-        std::ranges::for_each(nums, [this](auto num) { create(num); });
+        create(path / (target + num));
     }
 
-    explicit Handler(const configrw_t& config) : path{config}
+    explicit Handler(const configrw_t& config) :
+        path{config}, num{}, directory{path}
     {}
 
     ~Handler()
     {
-        if (!nums.empty())
-            std::ranges::for_each(nums, [this](auto num) { remove(num); });
+        if (!target.empty())
+            remove(directory);
     }
 
-    std::string read(const std::string& name)
+    bool write(const std::string& name, const std::string& val) const
     {
-        std::string ret;
-        read(0, name, ret);
-        return ret;
-    }
-
-    bool write(const std::string& name, const std::string& val)
-    {
-        return write(0, name, val);
-    }
-
-    bool read(const std::string& name,
-              std::vector<std::pair<uint32_t, std::string>>& vals) const
-    {
-        std::ranges::for_each(nums, [this, &name, &vals](auto num) {
-            if (std::string val; read(num, name, val))
-                vals.emplace_back(num, val);
-        });
-        return true;
-    }
-
-    bool read(uint32_t num, const std::string& name, std::string& val,
-              bool parent = false) const
-    {
-        auto file = getfilename(num, name, parent);
-        auto retries{accessattemptsmax};
-        while (retries--)
-        {
-            if (std::ifstream ifs{file}; ifs.is_open())
-            {
-                ifs >> val;
-                return true;
-            }
-            setdelay(1ms);
-        }
-        throw std::runtime_error("Cannot open sysfs input file " +
-                                 std::string(file));
-    }
-
-    bool write(const std::string& name,
-               const std::vector<std::pair<uint32_t, std::string>>& vals) const
-    {
-        std::ranges::for_each(vals, [this, &name](const auto& val) {
-            write(std::get<uint32_t>(val), name, std::get<std::string>(val));
-        });
-        return true;
-    }
-
-    bool write(uint32_t num, const std::string& name, const std::string& val,
-               bool parent = false) const
-    {
-        auto file = getfilename(num, name, parent);
+        const auto file = directory / name;
         auto retries{accessattemptsmax};
         while (retries--)
         {
@@ -99,23 +48,27 @@ struct Sysfs::Handler
                                  std::string(file));
     }
 
-    bool writetest(
-        const std::string& name,
-        const std::vector<std::pair<uint32_t, std::string>>& vals) const
+    bool read(const std::string& name, std::string& val) const
     {
-        std::ranges::for_each(vals, [this, &name](const auto& val) {
-            writetest(std::get<uint32_t>(val), name,
-                      std::get<std::string>(val));
-        });
-        return true;
+        const auto file = directory / name;
+        auto retries{accessattemptsmax};
+        while (retries--)
+        {
+            if (std::ifstream ifs{file}; ifs.is_open())
+            {
+                ifs >> val;
+                return true;
+            }
+            setdelay(1ms);
+        }
+        throw std::runtime_error("Cannot open sysfs input file " +
+                                 std::string(file));
     }
 
-    bool writetest(uint32_t num, const std::string& name,
-                   const std::string& val, bool parent = false) const
+    bool writetest(const std::string& name, const std::string& val) const
     {
-        auto file = getfilename(num, name, parent);
-        if (std::string ret;
-            write(num, name, val) && read(num, name, ret) && ret == val)
+        const auto file = directory / name;
+        if (std::string ret; write(name, val) && read(name, ret) && ret == val)
             return true;
         throw std::runtime_error("Cannot set value for sysfs file " +
                                  std::string(file));
@@ -123,21 +76,24 @@ struct Sysfs::Handler
 
   private:
     const std::filesystem::path path;
-    const std::string type;
-    const std::unordered_set<uint32_t> nums;
+    const std::string num;
+    const std::string target;
+    std::filesystem::path directory;
     const uint32_t accessattemptsmax{100};
 
-    bool create(uint32_t num)
+    bool create(std::filesystem::path node)
     {
-        auto node = getfilename(num, {}, false);
-        if (write(num, "export", std::to_string(num), true))
+        if (write("export", num))
         {
             auto retries{accessattemptsmax};
             while (retries--)
             {
                 if (std::filesystem::exists(node) &&
                     !std::filesystem::is_empty(node))
+                {
+                    directory = node;
                     return true;
+                }
                 setdelay(1ms);
             }
         }
@@ -145,10 +101,10 @@ struct Sysfs::Handler
                                  std::string(node));
     }
 
-    bool remove(uint32_t num)
+    bool remove(std::filesystem::path node)
     {
-        auto node = getfilename(num, {}, false);
-        if (write(num, "unexport", std::to_string(num), true))
+        directory = path;
+        if (write("unexport", num))
         {
             auto retries{accessattemptsmax};
             while (retries--)
@@ -160,23 +116,6 @@ struct Sysfs::Handler
         }
         throw std::runtime_error("Cannot remove sysfs node " +
                                  std::string(node));
-    }
-
-    std::filesystem::path getfilename(uint32_t num, const std::string& name,
-                                      bool parent) const
-    {
-        std::filesystem::path filepath{path};
-        if (!parent && !type.empty())
-        {
-            if (nums.contains(num))
-                filepath += type + std::to_string(num);
-            else
-                throw std::runtime_error(
-                    std::source_location::current().function_name() +
-                    "-> sysfs node number not supported"s +
-                    std::to_string(num));
-        }
-        return filepath / name;
     }
 
     void setdelay(std::chrono::milliseconds time) const
@@ -202,20 +141,9 @@ Sysfs::Sysfs(const config_t& config)
 }
 Sysfs::~Sysfs() = default;
 
-std::string Sysfs::read(const std::string& name)
+bool Sysfs::read(const std::string& name, std::string& val)
 {
-    return handler->read(name);
-}
-
-bool Sysfs::read(const std::string& name,
-                 std::vector<std::pair<uint32_t, std::string>>& vals)
-{
-    return handler->read(name, vals);
-}
-
-bool Sysfs::read(uint32_t num, const std::string& name, std::string& val)
-{
-    return handler->read(num, name, val);
+    return handler->read(name, val);
 }
 
 bool Sysfs::write(const std::string& name, const std::string& val)
@@ -223,27 +151,9 @@ bool Sysfs::write(const std::string& name, const std::string& val)
     return handler->write(name, val);
 }
 
-bool Sysfs::write(const std::string& name,
-                  const std::vector<std::pair<uint32_t, std::string>>& vals)
+bool Sysfs::writetest(const std::string& name, const std::string& val)
 {
-    return handler->write(name, vals);
-}
-
-bool Sysfs::write(uint32_t num, const std::string& name, const std::string& val)
-{
-    return handler->write(num, name, val);
-}
-
-bool Sysfs::writetest(const std::string& name,
-                      const std::vector<std::pair<uint32_t, std::string>>& vals)
-{
-    return handler->writetest(name, vals);
-}
-
-bool Sysfs::writetest(uint32_t num, const std::string& name,
-                      const std::string& val)
-{
-    return handler->writetest(num, name, val);
+    return handler->writetest(name, val);
 }
 
 } // namespace sysfs::lnx
