@@ -1,0 +1,19 @@
+$ apt search wiringpi
+$ gpio readall
+
+ |  13 |  23 | GPIO.23 | ALT0 | 0 | 33 || 34 |   |      | 0v      |     |     |
+ |  19 |  24 | GPIO.24 |   -  | 0 | 35 || 36 | 1 | OUT  | GPIO.27 | 27  | 16  |
+ |  26 |  25 | GPIO.25 |   -  | 0 | 37 || 38 | 0 |  -   | GPIO.28 | 28  | 20  |
+ |     |     |      0v |      |   | 39 || 40 | 0 |  -   | GPIO.29 | 29  | 21  |
+ +-----+-----+---------+------+---+----++----+---+------+---------+-----+-----+
+ | BCM | wPi |   Name  | Mode | V | Physical | V | Mode | Name    | wPi | BCM |
+ +-----+-----+---------+------+---+---Pi 5---+---+------+---------+-----+-----+
+
+$ cat /sys/kernel/debug/gpio | grep -i PIN36
+ gpio-415 (PIN36               )
+
+$ pwd
+/sys/class/gpio
+
+$ echo 415 > export
+
