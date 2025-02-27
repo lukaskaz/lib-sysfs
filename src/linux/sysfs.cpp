@@ -16,13 +16,14 @@ struct Sysfs::Handler
   public:
     explicit Handler(const configexportrw_t& config) :
         path{std::get<0>(config)}, type{std::get<1>(config)},
-        num{std::to_string(std::get<2>(config))}
+        num{std::to_string(std::get<2>(config))}, logif{std::get<3>(config)}
 
     {
         create();
     }
 
-    explicit Handler(const configrw_t& config) : path{config}
+    explicit Handler(const configrw_t& config) :
+        path{std::get<0>(config)}, logif{std::get<1>(config)}
     {}
 
     ~Handler()
@@ -41,12 +42,14 @@ struct Sysfs::Handler
             if (std::ofstream ofs{file}; ofs.is_open())
             {
                 ofs << val << std::flush;
+                log(logging::type::debug,
+                    "Written[" + num + "]: '" + val + "' to '" + name + "'");
                 return true;
             }
             setdelay(1ms);
         }
-        throw std::runtime_error("Cannot open sysfs output file " +
-                                 std::string(file));
+        throw std::runtime_error("Cannot open sysfs output file [" + num +
+                                 "] " + std::string(file));
     }
 
     bool read(const std::string& name, std::string& val,
@@ -59,11 +62,13 @@ struct Sysfs::Handler
             if (std::ifstream ifs{file}; ifs.is_open())
             {
                 ifs >> val;
+                log(logging::type::debug,
+                    "Read[" + num + "]: '" + val + "' from '" + name + "'");
                 return true;
             }
             setdelay(1ms);
         }
-        throw std::runtime_error("Cannot open sysfs input file " +
+        throw std::runtime_error("Cannot open sysfs input file [" + num + "] " +
                                  std::string(file));
     }
 
@@ -73,8 +78,8 @@ struct Sysfs::Handler
         const auto file = getfilename(name, parent);
         if (std::string ret; write(name, val) && read(name, ret) && ret == val)
             return true;
-        throw std::runtime_error("Cannot set value for sysfs file " +
-                                 std::string(file));
+        throw std::runtime_error("Cannot set value for sysfs file [" + num +
+                                 "] " + std::string(file));
     }
 
   private:
@@ -82,40 +87,55 @@ struct Sysfs::Handler
     const std::string type;
     const std::string num;
     const uint32_t accessattemptsmax{100};
+    const std::shared_ptr<logging::LogIf> logif;
 
     bool create()
     {
         const auto node = getnodename();
-        if (write("export", num, true))
+        const auto nodename{std::string(node)};
+        if (!std::filesystem::exists(node))
         {
-            auto retries{accessattemptsmax};
-            while (retries--)
+            if (write("export", num, true))
             {
-                if (std::filesystem::exists(node) &&
-                    !std::filesystem::is_empty(node))
-                    return true;
-                setdelay(1ms);
+                auto retries{accessattemptsmax};
+                while (retries--)
+                {
+                    if (std::filesystem::exists(node) &&
+                        !std::filesystem::is_empty(node))
+                    {
+                        log(logging::type::info, "Created node: " + nodename);
+                        return true;
+                    }
+                    setdelay(1ms);
+                }
             }
+            throw std::runtime_error("Cannot create sysfs node " + nodename);
         }
-        throw std::runtime_error("Cannot create sysfs node " +
-                                 std::string(node));
+        throw std::runtime_error("Sysfs node already exist " + nodename);
     }
 
     bool remove()
     {
         const auto node = getnodename();
-        if (write("unexport", num, true))
+        const auto nodename{std::string(node)};
+        if (std::filesystem::exists(node))
         {
-            auto retries{accessattemptsmax};
-            while (retries--)
+            if (write("unexport", num, true))
             {
-                if (!std::filesystem::exists(node))
-                    return true;
-                setdelay(1ms);
+                auto retries{accessattemptsmax};
+                while (retries--)
+                {
+                    if (!std::filesystem::exists(node))
+                    {
+                        log(logging::type::info, "Removed node: " + nodename);
+                        return true;
+                    }
+                    setdelay(1ms);
+                }
             }
+            throw std::runtime_error("Cannot remove sysfs node " + nodename);
         }
-        throw std::runtime_error("Cannot remove sysfs node " +
-                                 std::string(node));
+        throw std::runtime_error("Sysfs node not exist " + nodename);
     }
 
     std::filesystem::path getnodename() const
@@ -134,6 +154,14 @@ struct Sysfs::Handler
     void setdelay(std::chrono::milliseconds time) const
     {
         usleep((uint32_t)time.count() * 1000);
+    }
+
+    void log(
+        logging::type type, const std::string& msg,
+        const std::source_location loc = std::source_location::current()) const
+    {
+        if (logif)
+            logif->log(type, std::string{loc.function_name()}, msg);
     }
 };
 
