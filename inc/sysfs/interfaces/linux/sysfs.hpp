@@ -1,5 +1,6 @@
 #pragma once
 
+#include "log/interfaces/logging.hpp"
 #include "sysfs/factory.hpp"
 
 #include <tuple>
@@ -14,8 +15,9 @@ enum class mounttype
     inverted
 };
 
-using configrw_t = std::string;
-using configexportrw_t = std::tuple<std::string, std::string, uint32_t>;
+using configrw_t = std::tuple<std::string, std::shared_ptr<logging::LogIf>>;
+using configexportrw_t = std::tuple<std::string, std::string, uint32_t,
+                                    std::shared_ptr<logging::LogIf>>;
 using config_t = std::variant<std::monostate, configrw_t, configexportrw_t>;
 
 class Sysfs : public SysfsIf

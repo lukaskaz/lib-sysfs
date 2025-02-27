@@ -1,3 +1,4 @@
+#include "log/interfaces/console.hpp"
 #include "sysfs/interfaces/linux/sysfs.hpp"
 
 #include <iostream>
@@ -10,8 +11,13 @@ int main(int argc, [[maybe_unused]] char** argv)
         {
             std::cout << "First scenario -> reading file\n";
             using namespace sysfs::lnx;
+            auto loglvl = (bool)atoi(argv[1]) ? logging::type::debug
+                                              : logging::type::info;
             std::string path{"/sys/class/thermal"};
-            auto iface = sysfs::Factory::create<Sysfs, configrw_t>(path);
+            auto logif =
+                logging::LogFactory::create<logging::console::Log>(loglvl);
+            auto iface =
+                sysfs::Factory::create<Sysfs, configrw_t>({path, logif});
 
             std::string val;
             iface->read("thermal_zone0/temp", val);
@@ -22,9 +28,13 @@ int main(int argc, [[maybe_unused]] char** argv)
         {
             std::cout << "Second scenario -> export/write/read\n";
             using namespace sysfs::lnx;
+            auto loglvl = (bool)atoi(argv[1]) ? logging::type::debug
+                                              : logging::type::info;
             std::string path{"/sys/class/gpio/"};
+            auto logif =
+                logging::LogFactory::create<logging::console::Log>(loglvl);
             auto iface = sysfs::Factory::create<Sysfs, configexportrw_t>(
-                {path, "gpio", 415});
+                {path, "gpio", 415, logif});
 
             std::string val;
             iface->read("direction", val);
