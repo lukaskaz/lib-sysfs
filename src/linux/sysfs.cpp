@@ -42,7 +42,7 @@ struct Sysfs::Handler
             if (std::ofstream ofs{file}; ofs.is_open())
             {
                 ofs << val << std::flush;
-                log(logging::type::debug,
+                log(logs::level::debug,
                     "Written[" + num + "]: '" + val + "' to '" + name + "'");
                 return true;
             }
@@ -62,7 +62,7 @@ struct Sysfs::Handler
             if (std::ifstream ifs{file}; ifs.is_open())
             {
                 ifs >> val;
-                log(logging::type::debug,
+                log(logs::level::debug,
                     "Read[" + num + "]: '" + val + "' from '" + name + "'");
                 return true;
             }
@@ -87,7 +87,7 @@ struct Sysfs::Handler
     const std::string type;
     const std::string num;
     const uint32_t accessattemptsmax{100};
-    const std::shared_ptr<logging::LogIf> logif;
+    const std::shared_ptr<logs::LogIf> logif;
 
     bool create()
     {
@@ -103,7 +103,7 @@ struct Sysfs::Handler
                     if (std::filesystem::exists(node) &&
                         !std::filesystem::is_empty(node))
                     {
-                        log(logging::type::info, "Created node: " + nodename);
+                        log(logs::level::info, "Created node: " + nodename);
                         return true;
                     }
                     setdelay(1ms);
@@ -127,7 +127,7 @@ struct Sysfs::Handler
                 {
                     if (!std::filesystem::exists(node))
                     {
-                        log(logging::type::info, "Removed node: " + nodename);
+                        log(logs::level::info, "Removed node: " + nodename);
                         return true;
                     }
                     setdelay(1ms);
@@ -157,11 +157,11 @@ struct Sysfs::Handler
     }
 
     void log(
-        logging::type type, const std::string& msg,
+        logs::level level, const std::string& msg,
         const std::source_location loc = std::source_location::current()) const
     {
         if (logif)
-            logif->log(type, std::string{loc.function_name()}, msg);
+            logif->log(level, std::string{loc.function_name()}, msg);
     }
 };
 
