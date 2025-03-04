@@ -1,4 +1,6 @@
-#include "log/interfaces/console.hpp"
+#include "logs/interfaces/console/logs.hpp"
+#include "logs/interfaces/group/logs.hpp"
+#include "logs/interfaces/storage/logs.hpp"
 #include "sysfs/interfaces/linux/sysfs.hpp"
 
 #include <iostream>
@@ -11,11 +13,20 @@ int main(int argc, [[maybe_unused]] char** argv)
         {
             std::cout << "First scenario -> reading file\n";
             using namespace sysfs::lnx;
-            auto loglvl = (bool)atoi(argv[1]) ? logging::type::debug
-                                              : logging::type::info;
+            auto loglvl =
+                (bool)atoi(argv[1]) ? logs::level::debug : logs::level::info;
             std::string path{"/sys/class/thermal"};
+
+            auto logconsole = logs::Factory::create<logs::console::Log,
+                                                    logs::console::config_t>(
+                {loglvl, logs::tags::hide});
+            auto logstorage = logs::Factory::create<logs::storage::Log,
+                                                    logs::storage::config_t>(
+                {loglvl, logs::tags::show, {}});
             auto logif =
-                logging::LogFactory::create<logging::console::Log>(loglvl);
+                logs::Factory::create<logs::group::Log, logs::group::config_t>(
+                    {logconsole, logstorage});
+
             auto iface =
                 sysfs::Factory::create<Sysfs, configrw_t>({path, logif});
 
@@ -28,11 +39,20 @@ int main(int argc, [[maybe_unused]] char** argv)
         {
             std::cout << "Second scenario -> export/write/read\n";
             using namespace sysfs::lnx;
-            auto loglvl = (bool)atoi(argv[1]) ? logging::type::debug
-                                              : logging::type::info;
+            auto loglvl =
+                (bool)atoi(argv[1]) ? logs::level::debug : logs::level::info;
             std::string path{"/sys/class/gpio/"};
+
+            auto logconsole = logs::Factory::create<logs::console::Log,
+                                                    logs::console::config_t>(
+                {loglvl, logs::tags::hide});
+            auto logstorage = logs::Factory::create<logs::storage::Log,
+                                                    logs::storage::config_t>(
+                {loglvl, logs::tags::show, {}});
             auto logif =
-                logging::LogFactory::create<logging::console::Log>(loglvl);
+                logs::Factory::create<logs::group::Log, logs::group::config_t>(
+                    {logconsole, logstorage});
+
             auto iface = sysfs::Factory::create<Sysfs, configexportrw_t>(
                 {path, "gpio", 415, logif});
 
