@@ -1,5 +1,7 @@
 #include "sysfs/interfaces/linux/sysfs.hpp"
 
+#include "shell/interfaces/linux/bash/shell.hpp"
+
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -16,7 +18,8 @@ struct Sysfs::Handler
   public:
     explicit Handler(const configexportrw_t& config) :
         path{std::get<0>(config)}, type{std::get<1>(config)},
-        num{std::to_string(std::get<2>(config))}, logif{std::get<3>(config)}
+        num{std::to_string(std::get<2>(config))}, logif{std::get<3>(config)},
+        shell{shell::Factory::create<shell::lnx::bash::Shell>()}
 
     {
         create();
@@ -32,7 +35,7 @@ struct Sysfs::Handler
             remove();
     }
 
-    bool write(const std::string& name, const std::string& val,
+    bool write(const std::filesystem::path& name, const std::string& val,
                bool parent = false) const
     {
         const auto file = getfilename(name, parent);
@@ -42,8 +45,8 @@ struct Sysfs::Handler
             if (std::ofstream ofs{file}; ofs.is_open())
             {
                 ofs << val << std::flush;
-                log(logs::level::debug,
-                    "Written[" + num + "]: '" + val + "' to '" + name + "'");
+                log(logs::level::debug, "Written[" + num + "]: '" + val +
+                                            "' to '" + name.native() + "'");
                 return true;
             }
             setdelay(1ms);
@@ -52,7 +55,7 @@ struct Sysfs::Handler
                                  "] " + std::string(file));
     }
 
-    bool read(const std::string& name, std::string& val,
+    bool read(const std::filesystem::path& name, std::string& val,
               bool parent = false) const
     {
         const auto file = getfilename(name, parent);
@@ -62,8 +65,8 @@ struct Sysfs::Handler
             if (std::ifstream ifs{file}; ifs.is_open())
             {
                 ifs >> val;
-                log(logs::level::debug,
-                    "Read[" + num + "]: '" + val + "' from '" + name + "'");
+                log(logs::level::debug, "Read[" + num + "]: '" + val +
+                                            "' from '" + name.native() + "'");
                 return true;
             }
             setdelay(1ms);
@@ -72,7 +75,7 @@ struct Sysfs::Handler
                                  std::string(file));
     }
 
-    bool writetest(const std::string& name, const std::string& val,
+    bool writetest(const std::filesystem::path& name, const std::string& val,
                    bool parent = false) const
     {
         const auto file = getfilename(name, parent);
@@ -82,12 +85,44 @@ struct Sysfs::Handler
                                  "] " + std::string(file));
     }
 
+    bool elevread(const std::filesystem::path& name, std::string& val,
+                  bool parent = false) const
+    {
+        elevate(name, "o", "r");
+        return read(name, val, parent);
+    }
+
+    bool elevwrite(const std::filesystem::path& name, const std::string& val,
+                   bool parent = false) const
+    {
+        elevate(name, "o", "w");
+        return write(name, val, parent);
+    }
+
+    bool elevate(const std::filesystem::path& name, const std::string& owner,
+                 const std::string& perm) const
+    {
+        if (!shell->run("sudo chmod " + owner + "+" + perm + " " +
+                        name.native()))
+        {
+            log(logs::level::debug, "File " + name.native() +
+                                        " elevated to: '" + owner + "+" + perm +
+                                        "'");
+            return true;
+        }
+        else
+            log(logs::level::warning, "Cannot elevate file " + name.native() +
+                                          " to: '" + owner + "+" + perm + "'");
+        return false;
+    }
+
   private:
     const std::filesystem::path path;
     const std::string type;
     const std::string num;
     const uint32_t accessattemptsmax{100};
     const std::shared_ptr<logs::LogIf> logif;
+    const std::shared_ptr<shell::ShellIf> shell;
 
     bool create()
     {
@@ -182,19 +217,35 @@ Sysfs::Sysfs(const config_t& config)
 }
 Sysfs::~Sysfs() = default;
 
-bool Sysfs::read(const std::string& name, std::string& val)
+bool Sysfs::read(const std::filesystem::path& name, std::string& val)
 {
     return handler->read(name, val);
 }
 
-bool Sysfs::write(const std::string& name, const std::string& val)
+bool Sysfs::write(const std::filesystem::path& name, const std::string& val)
 {
     return handler->write(name, val);
 }
 
-bool Sysfs::writetest(const std::string& name, const std::string& val)
+bool Sysfs::writetest(const std::filesystem::path& name, const std::string& val)
 {
     return handler->writetest(name, val);
+}
+
+bool Sysfs::elevread(const std::filesystem::path& name, std::string& val)
+{
+    return handler->read(name, val);
+}
+
+bool Sysfs::elevwrite(const std::filesystem::path& name, const std::string& val)
+{
+    return handler->write(name, val);
+}
+
+bool Sysfs::elevate(const std::filesystem::path& name, const std::string& owner,
+                    const std::string& perm)
+{
+    return handler->elevate(name, owner, perm);
 }
 
 } // namespace sysfs::lnx

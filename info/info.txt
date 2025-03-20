@@ -11,6 +11,9 @@ $ gpio readall
 
 $ cat /sys/kernel/debug/gpio | grep -i PIN36
  gpio-415 (PIN36               )
+## OR ##
+$ cat /sys/kernel/debug/gpio |grep -i GPIO21
+ gpio-592 (GPIO21
 
 $ pwd
 /sys/class/gpio
