@@ -1,6 +1,7 @@
 #include "logs/interfaces/console/logs.hpp"
 #include "logs/interfaces/group/logs.hpp"
 #include "logs/interfaces/storage/logs.hpp"
+#include "sysfs/helpers.hpp"
 #include "sysfs/interfaces/linux/sysfs.hpp"
 
 #include <iostream>
@@ -19,10 +20,10 @@ int main(int argc, [[maybe_unused]] char** argv)
 
             auto logconsole = logs::Factory::create<logs::console::Log,
                                                     logs::console::config_t>(
-                {loglvl, logs::tags::hide});
+                {loglvl, logs::time::hide, logs::tags::hide});
             auto logstorage = logs::Factory::create<logs::storage::Log,
                                                     logs::storage::config_t>(
-                {loglvl, logs::tags::show, {}});
+                {loglvl, logs::time::show, logs::tags::show, {}});
             auto logif =
                 logs::Factory::create<logs::group::Log, logs::group::config_t>(
                     {logconsole, logstorage});
@@ -45,16 +46,16 @@ int main(int argc, [[maybe_unused]] char** argv)
 
             auto logconsole = logs::Factory::create<logs::console::Log,
                                                     logs::console::config_t>(
-                {loglvl, logs::tags::hide});
+                {loglvl, logs::time::hide, logs::tags::hide});
             auto logstorage = logs::Factory::create<logs::storage::Log,
                                                     logs::storage::config_t>(
-                {loglvl, logs::tags::show, {}});
+                {loglvl, logs::time::show, logs::tags::show, {}});
             auto logif =
                 logs::Factory::create<logs::group::Log, logs::group::config_t>(
                     {logconsole, logstorage});
 
             auto iface = sysfs::Factory::create<Sysfs, configexportrw_t>(
-                {path, "gpio", 415, logif});
+                {path, "gpio", 592, logif});
 
             std::string val;
             iface->read("direction", val);
@@ -67,8 +68,8 @@ int main(int argc, [[maybe_unused]] char** argv)
             std::cout << "Gpio value: " << val << "\n";
             std::cout << "Press [enter]" << std::flush;
             getchar();
-            val = val == "0" ? "1" : val;
-            iface->writetest("value", val);
+            uint32_t numval = val == "0" ? 1 : 0;
+            iface->writetest("value", sysfs::str(numval));
             iface->read("value", val);
             std::cout << "Gpio value: " << val << "\n";
             std::cout

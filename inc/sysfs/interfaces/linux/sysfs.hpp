@@ -24,9 +24,13 @@ class Sysfs : public SysfsIf
 {
   public:
     ~Sysfs();
-    bool read(const std::string&, std::string&) override;
-    bool write(const std::string&, const std::string&) override;
-    bool writetest(const std::string&, const std::string&) override;
+    bool read(const std::filesystem::path&, std::string&) override;
+    bool write(const std::filesystem::path&, const std::string&) override;
+    bool writetest(const std::filesystem::path&, const std::string&) override;
+    bool elevread(const std::filesystem::path&, std::string&) override;
+    bool elevwrite(const std::filesystem::path&, const std::string&) override;
+    bool elevate(const std::filesystem::path&, const std::string&,
+                 const std::string&) override;
 
   private:
     friend class sysfs::Factory;
