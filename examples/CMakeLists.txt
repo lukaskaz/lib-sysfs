@@ -8,5 +8,7 @@ if(POLICY CMP0002)
 endif()
 
 if(ADD_EXAMPLES)
-    add_subdirectory(linux/rpi)
+    add_subdirectory(linux/sysfs/)
+    add_subdirectory(linux/trigger/oneshot/)
+    add_subdirectory(linux/trigger/periodic/)
 endif()
