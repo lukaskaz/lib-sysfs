@@ -1,8 +1,8 @@
 #include "sysfs/interfaces/linux/sysfs.hpp"
 
-#include "shell/interfaces/linux/bash/shell.hpp"
-
 #include <chrono>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <source_location>
@@ -18,16 +18,14 @@ struct Sysfs::Handler
   public:
     explicit Handler(const configexportrw_t& config) :
         path{std::get<0>(config)}, type{std::get<1>(config)},
-        num{std::to_string(std::get<2>(config))}, logif{std::get<3>(config)},
-        shell{shell::Factory::create<shell::lnx::bash::Shell>()}
+        num{std::to_string(std::get<2>(config))}, logif{std::get<3>(config)}
 
     {
         create();
     }
 
     explicit Handler(const configrw_t& config) :
-        path{std::get<0>(config)}, logif{std::get<1>(config)},
-        shell{shell::Factory::create<shell::lnx::bash::Shell>()}
+        path{std::get<0>(config)}, logif{std::get<1>(config)}
     {}
 
     ~Handler()
@@ -103,8 +101,8 @@ struct Sysfs::Handler
     bool elevate(const std::filesystem::path& name, const std::string& owner,
                  const std::string& perm) const
     {
-        if (!shell->run("sudo chmod " + owner + "+" + perm + " " +
-                        name.native()))
+        auto command = "sudo chmod " + owner + "+" + perm + " " + name.native();
+        if (!std::system(command.c_str()))
         {
             log(logs::level::debug, "File " + name.native() +
                                         " elevated to: '" + owner + "+" + perm +
@@ -113,7 +111,8 @@ struct Sysfs::Handler
         }
         else
             log(logs::level::warning, "Cannot elevate file " + name.native() +
-                                          " to: '" + owner + "+" + perm + "'");
+                                          " to: '" + owner + "+" + perm +
+                                          "', due to: " + strerror(errno));
         return false;
     }
 
@@ -123,7 +122,6 @@ struct Sysfs::Handler
     const std::string num;
     const uint32_t accessattemptsmax{100};
     const std::shared_ptr<logs::LogIf> logif;
-    const std::shared_ptr<shell::ShellIf> shell;
 
     bool create()
     {

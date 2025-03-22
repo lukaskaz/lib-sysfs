@@ -37,7 +37,7 @@ struct Trigger::Handler
         setup();
         log(logs::level::info,
             "Created periodic trigger: " + (pathiio / dirname).native() +
-                " -> " + trigname);
+                " -> " + trigname + "@" + str(freq) + "hz");
     }
 
     ~Handler()
