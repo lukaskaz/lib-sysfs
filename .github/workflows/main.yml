@@ -34,9 +34,9 @@ jobs:
         mkdir build && cd build && cmake -DADD_EXAMPLES=ON .. && make
     - name: Executing example programs
       run: |
-        ./examples/linux/sysfs/prog
-        ./examples/linux/trigger/oneshot/prog
-        ./examples/linux/trigger/periodic/prog
+        ./build/examples/linux/sysfs/prog
+        ./build/examples/linux/trigger/oneshot/prog
+        ./build/examples/linux/trigger/periodic/prog
 
   test:
     name: Test
